@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="es" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<title>Redalsa — Control de Vehículos</title>
+<style>
+:root {
+  --pri: #373736;
+  --accent: #E30613;
+  --ok: #107c10;
+  --mal: #E30613;
+  --na: #8a8886;
+  --bg: #f3f2f1;
+  --surf: #fff;
+  --brd: #edebe9;
+  --txt: #373736;
+  --txt2: #6b6b6a;
+  --nav-h: 62px;
+  --radius: 8px;
+  --arrow-svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23605e5c' d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1a19;
+    --surf: #2d2c2b;
+    --brd: #3b3a39;
+    --txt: #f3f2f1;
+    --txt2: #c8c6c4;
+  }
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--txt); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 15px; }
+body { display: flex; flex-direction: column; }
+#app { flex: 1; overflow-y: auto; padding-block-end: calc(var(--nav-h) + 8px); }
+
+/* ── Views ── */
+.view { display: none; padding: 16px; max-width: 800px; margin-inline: auto; }
+.view.active { display: block; }
+
+/* ── Header ── */
+.hdr { background: var(--pri); color: #fff; padding: 14px 16px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 10; }
+.hdr h1 { font-size: 1.1rem; font-weight: 600; flex: 1; }
+.hdr .sub { font-size: .8rem; opacity: .8; }
+
+/* ── Bottom nav ── */
+#bottom-nav {
+  position: fixed; inset-block-end: 0; inset-inline: 0;
+  height: var(--nav-h); background: var(--surf); border-block-start: 1px solid var(--brd);
+  display: flex; z-index: 20;
+}
+.nav-btn {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; border: none; background: transparent; color: var(--txt2); cursor: pointer;
+  font-size: .7rem; min-height: 48px; padding: 4px 0; transition: color .15s;
+}
+.nav-btn.active { color: var(--accent); }
+.nav-btn svg { width: 22px; height: 22px; }
+
+/* ── Cards ── */
+.card {
+  background: var(--surf); border: 1px solid var(--brd); border-radius: var(--radius);
+  padding: 14px 16px; margin-block-end: 10px; cursor: pointer; transition: box-shadow .15s;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+.card-top { display: flex; align-items: center; gap: 10px; }
+.card-veh { font-weight: 600; font-size: 1rem; flex: 1; }
+.card-plate { font-family: monospace; font-size: .9rem; color: var(--txt2); }
+.card-meta { font-size: .8rem; color: var(--txt2); display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.badge { padding: 2px 9px; border-radius: 999px; font-size: .75rem; font-weight: 600; white-space: nowrap; }
+.badge-ok { background: #dff6dd; color: var(--ok); }
+.badge-mal { background: #fde7e9; color: var(--mal); }
+.badge-pend { background: #fff4ce; color: #7a5c00; }
+.sync-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.sync-ok { background: var(--ok); }
+.sync-pend { background: var(--na); }
+
+/* ── Stats bar ── */
+.stats-bar {
+  display: flex; gap: 10px; margin-block-end: 14px; flex-wrap: wrap;
+}
+.stat-card {
+  flex: 1; min-width: 80px; background: var(--surf); border: 1px solid var(--brd);
+  border-radius: var(--radius); padding: 10px 14px; text-align: center;
+}
+.stat-card .num { font-size: 1.6rem; font-weight: 700; color: var(--accent); line-height: 1; }
+.stat-card .lbl { font-size: .72rem; color: var(--txt2); margin-block-start: 3px; }
+
+/* ── Search ── */
+.search-wrap { position: relative; margin-block-end: 12px; }
+.search-wrap input {
+  width: 100%; padding: 10px 14px 10px 38px; border: 1px solid var(--brd);
+  border-radius: var(--radius); background: var(--surf); color: var(--txt);
+  font-size: .95rem; min-height: 48px;
+}
+.search-icon { position: absolute; inset-inline-start: 10px; top: 50%; transform: translateY(-50%); color: var(--txt2); pointer-events: none; }
+
+/* ── Section ── */
+.section { background: var(--surf); border: 1px solid var(--brd); border-radius: var(--radius); margin-block-end: 14px; overflow: hidden; }
+.section-title { background: var(--pri); color: #fff; padding: 10px 16px; font-size: .9rem; font-weight: 600; letter-spacing: .03em; border-inline-start: 4px solid var(--accent); }
+.section-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+
+/* ── Form rows ── */
+.frow { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 500px) { .frow { grid-template-columns: 1fr; } }
+.fgrp { display: flex; flex-direction: column; gap: 4px; }
+.fgrp.full { grid-column: 1 / -1; }
+.flbl { font-size: .8rem; color: var(--txt2); font-weight: 500; }
+.finp {
+  padding: 10px 12px; border: 1px solid var(--brd); border-radius: 6px;
+  background: var(--surf); color: var(--txt); font-size: .95rem; min-height: 48px;
+  width: 100%;
+}
+.finp:focus { outline: 2px solid var(--pri); outline-offset: 1px; }
+.finp:read-only { background: var(--bg); color: var(--txt2); cursor: default; }
+select.finp {
+  appearance: none; -webkit-appearance: none;
+  background-image: var(--arrow-svg);
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-inline-end: 34px;
+  cursor: pointer;
+}
+textarea.finp { min-height: 90px; resize: vertical; }
+
+/* ── Choice buttons ── */
+.choice-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.choice-lbl { font-size: .9rem; flex: 1; min-width: 120px; }
+.choice-btns { display: flex; gap: 6px; }
+.cbtn {
+  border: 2px solid var(--brd); background: transparent; color: var(--txt);
+  border-radius: 999px; padding: 6px 16px; font-size: .85rem; font-weight: 600;
+  cursor: pointer; min-height: 40px; transition: all .15s;
+}
+.cbtn:hover { border-color: var(--pri); color: var(--pri); }
+.cbtn.sel-ok { background: var(--ok); border-color: var(--ok); color: #fff; }
+.cbtn.sel-mal { background: var(--mal); border-color: var(--mal); color: #fff; }
+.cbtn.sel-na { background: var(--na); border-color: var(--na); color: #fff; }
+
+/* ── Canvas signature ── */
+#sig-canvas { border: 1px solid var(--brd); border-radius: 6px; width: 100%; max-width: 480px; height: 140px; background: var(--surf); touch-action: none; display: block; }
+.sig-actions { display: flex; gap: 8px; margin-block-start: 8px; }
+.sig-actions button { border: 1px solid var(--brd); background: var(--surf); color: var(--txt); border-radius: 6px; padding: 8px 16px; cursor: pointer; font-size: .85rem; min-height: 40px; }
+
+/* ── Submit button ── */
+.submit-btn {
+  background: var(--accent); color: #fff; border: none; border-radius: 8px;
+  padding: 14px 28px; font-size: 1rem; font-weight: 600; cursor: pointer;
+  width: 100%; min-height: 52px; margin-block-start: 8px; transition: opacity .15s;
+}
+.submit-btn:hover { opacity: .88; }
+
+/* ── Detail view ── */
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 500px) { .detail-grid { grid-template-columns: 1fr; } }
+.dfield { background: var(--bg); border-radius: 6px; padding: 8px 12px; }
+.dfield .dk { font-size: .75rem; color: var(--txt2); margin-block-end: 2px; }
+.dfield .dv { font-size: .9rem; font-weight: 500; }
+.dfield.full { grid-column: 1 / -1; }
+.back-btn { background: transparent; border: 1px solid var(--brd); color: var(--txt); border-radius: 6px; padding: 8px 16px; cursor: pointer; font-size: .9rem; min-height: 44px; margin-block-end: 14px; }
+
+/* ── Config view ── */
+.cfg-info { background: #dff0fc; border-radius: var(--radius); padding: 12px 16px; margin-block-end: 14px; font-size: .85rem; color: #004578; line-height: 1.5; }
+.cfg-actions { display: flex; gap: 8px; margin-block-start: 10px; flex-wrap: wrap; }
+.btn-secondary { background: var(--surf); border: 1px solid var(--brd); color: var(--txt); border-radius: 6px; padding: 10px 18px; cursor: pointer; font-size: .9rem; min-height: 44px; }
+.btn-primary { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 10px 18px; cursor: pointer; font-size: .9rem; font-weight: 600; min-height: 44px; }
+
+/* ── Empty state ── */
+.empty { text-align: center; padding: 40px 20px; color: var(--txt2); }
+.empty svg { width: 56px; height: 56px; margin-block-end: 12px; opacity: .4; }
+
+/* ── Modal ── */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,.45); align-items: center; justify-content: center; padding: 20px;
+}
+.modal-overlay.open { display: flex; }
+.modal-box {
+  background: var(--surf); border-radius: 12px; padding: 24px 20px; max-width: 420px; width: 100%;
+  box-shadow: 0 8px 32px rgba(0,0,0,.25); display: flex; flex-direction: column; gap: 14px;
+}
+.modal-box h2 { font-size: 1.1rem; font-weight: 700; color: var(--txt); }
+.modal-box p { font-size: .9rem; color: var(--txt2); line-height: 1.5; }
+.modal-email-link {
+  display: block; text-align: center; background: #0078d4; color: #fff;
+  text-decoration: none; border-radius: 8px; padding: 13px 20px;
+  font-size: 1rem; font-weight: 600; min-height: 48px; line-height: 1.4;
+}
+.modal-email-link:hover { opacity: .9; }
+.modal-close {
+  background: transparent; border: 1px solid var(--brd); color: var(--txt);
+  border-radius: 6px; padding: 9px 18px; cursor: pointer; font-size: .9rem; align-self: flex-end; min-height: 40px;
+}
+
+/* ── Print ── */
+@media print {
+  @page { margin: 12mm; size: A4; }
+  #bottom-nav, .submit-btn, .back-btn, .sig-actions, .cfg-actions, .modal-overlay, #toast, .detail-actions { display: none !important; }
+  /* Solo imprimir la vista activa */
+  .view { display: none !important; }
+  .view.active { display: block !important; max-width: 100% !important; padding: 0 !important; }
+  #app { overflow: visible !important; padding: 0 !important; height: auto !important; }
+  html, body { height: auto !important; overflow: visible !important; background: #fff !important; color: #000 !important; font-size: 12px; }
+  .hdr { background: #373736 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .section { break-inside: avoid; page-break-inside: avoid; margin-bottom: 8px !important; }
+  .section-title { background: #373736 !important; color: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .chip-ok, .chip-mal, .chip-na, .badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .detail-grid { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 6px !important; }
+  img { max-width: 240px !important; }
+}
+
+/* ── Toast ── */
+#toast { position: fixed; inset-block-end: calc(var(--nav-h) + 12px); inset-inline: 0; display: flex; justify-content: center; z-index: 50; pointer-events: none; }
+#toast span { background: #333; color: #fff; padding: 10px 22px; border-radius: 999px; font-size: .9rem; opacity: 0; transition: opacity .3s; }
+#toast span.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- HOME VIEW -->
+  <div id="view-home" class="view active">
+    <div class="hdr">
+      <img src="data:image/png;base64,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" alt="Redalsa" style="height:38px;width:auto;background:#fff;padding:4px 8px;border-radius:6px">
+      <div><h1>Control de Veh&#xED;culos</h1><div class="sub">Tecnolog&#xED;a de v&#xED;a</div></div>
+    </div>
+    <div style="padding:16px; max-width:800px; margin-inline:auto;">
+      <div class="stats-bar">
+        <div class="stat-card"><div class="num" id="stat-total">0</div><div class="lbl">Total</div></div>
+        <div class="stat-card"><div class="num" id="stat-ok" style="color:var(--ok)">0</div><div class="lbl">Correctos</div></div>
+        <div class="stat-card"><div class="num" id="stat-issues" style="color:var(--mal)">0</div><div class="lbl">Incidencias</div></div>
+        <div class="stat-card"><div class="num" id="stat-pend" style="color:#7a5c00">0</div><div class="lbl">Incompletos</div></div>
+      </div>
+      <div class="search-wrap">
+        <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="m16.5 16.5 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input id="search-input" type="search" placeholder="Buscar veh&#xED;culo, matr&#xED;cula, ch&#xF3;fer&#x2026;" class="finp" style="padding-inline-start:38px;">
+      </div>
+      <div id="cards-list"></div>
+    </div>
+  </div>
+
+  <!-- FORM VIEW -->
+  <div id="view-form" class="view">
+    <div class="hdr">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 20h9M3 20h3M16 3l5 5-9.5 9.5-5.5 1 1-5.5L16 3z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <h1 id="form-title">Nueva Inspecci&#xF3;n</h1>
+    </div>
+    <div style="padding:16px; max-width:800px; margin-inline:auto;">
+
+      <!-- DATOS DEL VEHÍCULO -->
+      <div class="section">
+        <div class="section-title">Datos del Veh&#xED;culo</div>
+        <div class="section-body">
+          <div class="frow">
+            <div class="fgrp">
+              <label class="flbl" for="f-matricula">Matr&#xED;cula</label>
+              <select id="f-matricula" class="finp">
+                <option value="">&#x2014; Seleccionar &#x2014;</option>
+                <option value="4254NBX" data-modelo="DUSTER" data-solred="7069">DUSTER &#x2014; 4254NBX</option>
+                <option value="7068MWG" data-modelo="DUSTER" data-solred="16">DUSTER &#x2014; 7068MWG</option>
+                <option value="4232NBX" data-modelo="JOGGER" data-solred="11">JOGGER &#x2014; 4232NBX</option>
+                <option value="4431NLI" data-modelo="JOGGER" data-solred="REDALSA3">JOGGER &#x2014; 4431NLI</option>
+                <option value="8479MHV" data-modelo="JOGGER" data-solred="8">JOGGER &#x2014; 8479MHV</option>
+                <option value="8480MHV" data-modelo="JOGGER" data-solred="17">JOGGER &#x2014; 8480MHV</option>
+                <option value="7821KSF" data-modelo="LODGY" data-solred="7">LODGY &#x2014; 7821KSF</option>
+                <option value="5965NLI" data-modelo="SCENIC" data-solred="REDALSA1">SCENIC &#x2014; 5965NLI</option>
+                <option value="6262NKD" data-modelo="SEAT LEON" data-solred="2">SEAT LEON &#x2014; 6262NKD</option>
+              </select>
+            </div>
+            <div class="fgrp">
+              <label class="flbl" for="f-vehiculo">Veh&#xED;culo</label>
+              <input id="f-vehiculo" type="text" class="finp" readonly placeholder="Auto-rellenado">
+            </div>
+          </div>
+          <div class="frow">
+            <div class="fgrp">
+              <label class="flbl" for="f-solred-num">N.&#xBA; SOLRED</label>
+              <input id="f-solred-num" type="text" class="finp" readonly placeholder="Auto-rellenado">
+            </div>
+            <div class="fgrp">
+              <label class="flbl" for="f-chofer">Ch&#xF3;fer</label>
+              <input id="f-chofer" type="text" class="finp" placeholder="Nombre del conductor">
+            </div>
+          </div>
+          <div class="frow">
+            <div class="fgrp full">
+              <label class="flbl" for="f-acompanantes">Acompa&#xF1;antes</label>
+              <input id="f-acompanantes" type="text" class="finp" placeholder="Nombres de acompa&#xF1;antes">
+            </div>
+          </div>
+          <div class="frow">
+            <div class="fgrp">
+              <label class="flbl" for="f-fecha-entrega">Fecha Entrega</label>
+              <input id="f-fecha-entrega" type="date" class="finp">
+            </div>
+            <div class="fgrp">
+              <label class="flbl" for="f-kms">Kil&#xF3;metros</label>
+              <input id="f-kms" type="number" class="finp" placeholder="0" min="0">
+            </div>
+          </div>
+          <div class="frow">
+            <div class="fgrp">
+              <label class="flbl" for="f-destino">Destino</label>
+              <input id="f-destino" type="text" class="finp" placeholder="Destino del veh&#xED;culo">
+            </div>
+            <div class="fgrp">
+              <label class="flbl" for="f-num-tablet">N.&#xBA; Tablet</label>
+              <select id="f-num-tablet" class="finp">
+                <option value="">&#x2014; Seleccionar &#x2014;</option>
+                <option value="RED-TAB-UT-03">RED-TAB-UT-03</option>
+                <option value="RED-TAB-UT-04">RED-TAB-UT-04</option>
+                <option value="RED-TAB-UT-05">RED-TAB-UT-05</option>
+                <option value="RED-TAB-UT-13">RED-TAB-UT-13</option>
+                <option value="RED-TAB-UT-14">RED-TAB-UT-14</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- NIVELES -->
+      <div class="section">
+        <div class="section-title">Niveles</div>
+        <div class="section-body">
+          <div class="frow">
+            <div class="fgrp">
+              <label class="flbl" for="f-deposito">Dep&#xF3;sito</label>
+              <select id="f-deposito" class="finp">
+                <option value="">&#x2014; Seleccionar &#x2014;</option>
+                <option value="1/8">1/8</option>
+                <option value="2/8">2/8</option>
+                <option value="3/8">3/8</option>
+                <option value="4/8">4/8</option>
+                <option value="5/8">5/8</option>
+                <option value="6/8">6/8</option>
+                <option value="7/8">7/8</option>
+                <option value="8/8">8/8</option>
+              </select>
+            </div>
+          </div>
+          <div class="choice-row"><span class="choice-lbl">Agua</span><div class="choice-btns" data-field="agua"><button type="button" class="cbtn" data-val="OK">OK</button><button type="button" class="cbtn" data-val="MAL">MAL</button><button type="button" class="cbtn" data-val="NA">N/A</button></div></div>
+          <div class="choice-row"><span class="choice-lbl">Aceite</span><div class="choice-btns" data-field="aceite"><button type="button" class="cbtn" data-val="OK">OK</button><button type="button" class="cbtn" data-val="MAL">MAL</button><button type="button" class="cbtn" data-val="NA">N/A</button></div></div>
+          <div class="choice-row"><span class="choice-lbl">Frenos</span><div class="choice-btns" data-field="frenos"><button type="button" class="cbtn" data-val="OK">OK</button><button type="button" class="cbtn" data-val="MAL">MAL</button><button type="button" class="cbtn" data-val="NA">N/A</button></div></div>
+          <div class="choice-row"><span class="choice-lbl">Agua Limpias</span><div class="choice-btns" data-field="agua_limpias"><button type="button" class="cbtn" data-val="OK">OK</button><button type="button" class="cbtn" data-val="MAL">MAL</button><button type="button" class="cbtn" data-val="NA">N/A</button></div></div>
+        </div>
+      </div>
+
+      <!-- RUEDAS -->
+      <div class="section">
+        <div class="section-title">Ruedas</div>
+        <div class="section-body">
+          <div class="choice-row"><span class="choice-lbl">Delanteras</span><div class="choice-btns" data-field="rueda_delantera"><button type="button" class="cbtn" data-val="OK">OK</button><button type="button" class="cbtn" data-val="MAL">MAL</button><button type="button" class="cbtn" data-val="NA">N/A</button></div></div>
+          <div class="choice-row"><span class="choice-lbl">Traseras</span><div class="choice-btns" data-field="rueda_trasera"><button type="button" class="cbtn" data-val="OK">OK</button><button type="button" class="cbtn" data-val="MAL">MAL</button><button type="button" class="cbtn" data-val="NA">N/A</button></div></div>
+        </div>
+      </div>
+
+      <!-- LUCES -->
+      <div class="section">
+        <div class="section-title">Luces</div>
+        <div class="section-body">
+          <div class="choice-row"><span class="choice-lbl">Delanteras</span><div class="choice-btns" data-field="luz_delantera"><button type="button" class="cbtn" data-val="OK">OK</button><button type="button" class="cbtn" data-val="MAL">MAL</button><button type="button" class="cbtn" data-val="NA">N/A</button></div></div>
+          <div class="choice-row"><span class="choice-lbl">Traseras</span><div class="choice-btns" data-field="luz_trasera"><button type="button" class="cbtn" data-val="OK">OK</button><button type="button" class="cbtn" data-val="MAL">MAL</button><button type="button" class="cbtn" data-val="NA">N/A</button></div></div>
+        </div>
+      </div>
+
+      <!-- ESTADO CHAPA -->
+      <div class="section">
+        <div class="section-title">Estado Chapa</div>
+        <div class="section-body">
+          <div class="choice-row"><span class="choice-lbl">Chapa y Pintura</span><div class="choice-btns" data-field="chapa"><button type="button" class="cbtn" data-val="OK">OK</button><button type="button" class="cbtn" data-val="MAL">MAL</button><button type="button" class="cbtn" data-val="NA">N/A</button></div></div>
+          <div class="choice-row"><span class="choice-lbl">Limpieza Exterior</span><div class="choice-btns" data-field="limpieza_ext"><button type="button" class="cbtn" data-val="OK">OK</button><button type="button" class="cbtn" data-val="MAL">MAL</button><button type="button" class="cbtn" data-val="NA">N/A</button></div></div>
+          <div class="choice-row"><span class="choice-lbl">Limpieza Interior</span><div class="choice-btns" data-field="limpieza_int"><button type="button" class="cbtn" data-val="OK">OK</button><button type="button" class="cbtn" data-val="MAL">MAL</button><button type="button" class="cbtn" data-val="NA">N/A</button></div></div>
+        </div>
+      </div>
+
+      <!-- EQUIPACIÓN -->
+      <div class="section">
+        <div class="section-title">Equipaci&#xF3;n</div>
+        <div class="section-body">
+          <div class="choice-row"><span class="choice-lbl">Rueda Repuesto</span><div class="choice-btns" data-field="rueda_repuesto"><button type="button" class="cbtn" data-val="OK">OK</button><button type="button" class="cbtn" data-val="MAL">MAL</button><button type="button" class="cbtn" data-val="NA">N/A</button></div></div>
+          <div class="choice-row"><span class="choice-lbl">Gato</span><div class="choice-btns" data-field="gato"><button type="button" class="cbtn" data-val="OK">OK</button><button type="button" class="cbtn" data-val="MAL">MAL</button><button type="button" class="cbtn" data-val="NA">N/A</button></div></div>
+          <div class="choice-row"><span class="choice-lbl">Kit Pinchazos</span><div class="choice-btns" data-field="kit_pinchazos"><button type="button" class="cbtn" data-val="OK">OK</button><button type="button" class="cbtn" data-val="MAL">MAL</button><button type="button" class="cbtn" data-val="NA">N/A</button></div></div>
+          <div class="choice-row"><span class="choice-lbl">Tri&#xE1;ngulos</span><div class="choice-btns" data-field="triangulos"><button type="button" class="cbtn" data-val="OK">OK</button><button type="button" class="cbtn" data-val="MAL">MAL</button><button type="button" class="cbtn" data-val="NA">N/A</button></div></div>
+          <div class="choice-row"><span class="choice-lbl">Guantes con Tri&#xE1;ngulos</span><div class="choice-btns" data-field="guantes"><button type="button" class="cbtn" data-val="OK">OK</button><button type="button" class="cbtn" data-val="MAL">MAL</button><button type="button" class="cbtn" data-val="NA">N/A</button></div></div>
+          <div class="choice-row"><span class="choice-lbl">Botiqu&#xED;n</span><div class="choice-btns" data-field="botiquin"><button type="button" class="cbtn" data-val="OK">OK</button><button type="button" class="cbtn" data-val="MAL">MAL</button><button type="button" class="cbtn" data-val="NA">N/A</button></div></div>
+          <div class="choice-row"><span class="choice-lbl">Chalecos</span><div class="choice-btns" data-field="chalecos"><button type="button" class="cbtn" data-val="OK">OK</button><button type="button" class="cbtn" data-val="MAL">MAL</button><button type="button" class="cbtn" data-val="NA">N/A</button></div></div>
+          <div class="choice-row"><span class="choice-lbl">Balizas V16</span><div class="choice-btns" data-field="balizas"><button type="button" class="cbtn" data-val="OK">OK</button><button type="button" class="cbtn" data-val="MAL">MAL</button><button type="button" class="cbtn" data-val="NA">N/A</button></div></div>
+        </div>
+      </div>
+
+      <!-- VARIOS -->
+      <div class="section">
+        <div class="section-title">Varios</div>
+        <div class="section-body">
+          <div class="choice-row"><span class="choice-lbl">Llaves</span><div class="choice-btns" data-field="llaves"><button type="button" class="cbtn" data-val="SI">S&#xED;</button><button type="button" class="cbtn" data-val="NO">No</button></div></div>
+          <div class="fgrp" style="margin-top:10px"><label class="flbl" for="f-llaves-obs">Especificaciones de llaves</label><input type="text" class="finp" id="f-llaves-obs" placeholder="Ej: llave maestra, mando garaje..."></div>
+        </div>
+      </div>
+
+      <!-- DEVOLUCIÓN -->
+      <div class="section">
+        <div class="section-title">Devoluci&#xF3;n</div>
+        <div class="section-body">
+          <div class="fgrp">
+            <label class="flbl" for="f-fecha-devolucion">Fecha Devoluci&#xF3;n</label>
+            <input id="f-fecha-devolucion" type="date" class="finp">
+          </div>
+        </div>
+      </div>
+
+      <!-- OBSERVACIONES Y FIRMA -->
+      <div class="section">
+        <div class="section-title">Observaciones y Firma</div>
+        <div class="section-body">
+          <div class="fgrp full">
+            <label class="flbl" for="f-observaciones">Observaciones</label>
+            <textarea id="f-observaciones" class="finp" placeholder="Anotaciones adicionales..."></textarea>
+          </div>
+          <div class="fgrp full">
+            <label class="flbl" for="sig-canvas">Firma</label>
+            <canvas id="sig-canvas" width="480" height="140" aria-label="Firma digital"></canvas>
+            <div class="sig-actions">
+              <button type="button" id="sig-clear-btn">Limpiar firma</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button type="button" id="submit-btn" class="submit-btn">Guardar Inspecci&#xF3;n</button>
+    </div>
+  </div>
+
+  <!-- DETAIL VIEW -->
+  <div id="view-detail" class="view">
+    <div class="hdr">
+      <h1>Detalle Inspecci&#xF3;n</h1>
+    </div>
+    <div style="padding:16px; max-width:800px; margin-inline:auto;">
+      <button type="button" id="detail-back-btn" class="back-btn">&#x2190; Volver</button>
+      <div id="detail-content"></div>
+    </div>
+  </div>
+
+  <!-- CONFIG VIEW -->
+  <div id="view-config" class="view">
+    <div class="hdr">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" stroke="white" stroke-width="2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="white" stroke-width="2"/></svg>
+      <h1>Configuraci&#xF3;n</h1>
+    </div>
+    <div style="padding:16px; max-width:800px; margin-inline:auto;">
+      <div class="cfg-info">
+        Power Automate monitorizar&#xE1; el buz&#xF3;n de correo indicado para guardar los partes autom&#xE1;ticamente en SharePoint.
+      </div>
+      <div class="section">
+        <div class="section-title">Correo de destino</div>
+        <div class="section-body">
+          <div class="fgrp full">
+            <label class="flbl" for="cfg-email">Email destino</label>
+            <input id="cfg-email" type="email" class="finp" placeholder="dsierra@redalsa.com">
+            <small style="color:var(--txt2);font-size:12px;margin-top:4px">Power Automate monitorizar&#xE1; este buz&#xF3;n para guardar los partes en SharePoint autom&#xE1;ticamente.</small>
+          </div>
+          <div class="cfg-actions">
+            <button type="button" id="cfg-save" class="btn-primary">Guardar configuraci&#xF3;n</button>
+          </div>
+        </div>
+      </div>
+      <div class="section" style="margin-top:16px">
+        <div class="section-title">Seguridad — PIN de acceso</div>
+        <div class="section-body">
+          <div class="fgrp full">
+            <label class="flbl">Nuevo PIN (4&#x2013;6 d&#xED;gitos)</label>
+            <input type="password" id="cfg-new-pin" inputmode="numeric" maxlength="6" class="finp" placeholder="Ej: 1234">
+          </div>
+          <div class="cfg-actions">
+            <button type="button" id="cfg-change-pin" class="btn-primary">Cambiar PIN</button>
+          </div>
+        </div>
+      </div>
+      <div class="section" style="margin-top:16px">
+        <div class="section-title">Resetear partes</div>
+        <div class="section-body">
+          <p style="font-size:14px;color:#605e5c;margin-bottom:14px">Partes guardados en este dispositivo: <strong id="partes-count">0</strong></p>
+          <button type="button" id="cfg-reset" style="background:#d13438;color:#fff;border:none;border-radius:8px;padding:13px 20px;font-size:14px;font-weight:700;cursor:pointer;min-height:48px;width:100%">&#x1F5D1; Borrar todos los partes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- #app -->
+
+<!-- BOTTOM NAV -->
+<nav id="bottom-nav" aria-label="Navegaci&#xF3;n principal">
+  <button type="button" id="nav-home" class="nav-btn active" aria-label="Inicio">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 12L12 3l9 9M5 10v9a1 1 0 0 0 1 1h4v-5h4v5h4a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Inicio
+  </button>
+  <button type="button" id="nav-new" class="nav-btn" aria-label="Nueva inspecci&#xF3;n">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    Nuevo
+  </button>
+  <button type="button" id="nav-export" class="nav-btn" aria-label="Exportar datos">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Exportar
+  </button>
+  <button type="button" id="nav-config" class="nav-btn" aria-label="Configuraci&#xF3;n">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" stroke="currentColor" stroke-width="2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="2"/></svg>
+    Config
+  </button>
+</nav>
+
+<!-- EMAIL MODAL (fixed in HTML) -->
+<div id="pin-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:10000;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#fff;border-radius:14px;padding:28px 24px;max-width:300px;width:100%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.3)">
+    <div style="font-size:36px;margin-bottom:6px">🔒</div>
+    <h3 style="margin-bottom:6px;color:#1a3f7f;font-size:18px">Configuraci&#xF3;n</h3>
+    <p style="font-size:13px;color:#605e5c;margin-bottom:16px">Introduce el PIN de acceso</p>
+    <input type="password" id="pin-input" inputmode="numeric" maxlength="6" autocomplete="off" style="width:100%;text-align:center;font-size:32px;letter-spacing:10px;border:2px solid #edebe9;border-radius:8px;padding:12px;margin-bottom:10px;outline:none;font-family:monospace">
+    <div id="pin-error" style="color:#d13438;font-size:13px;margin-bottom:10px;display:none">&#x274C; PIN incorrecto</div>
+    <button type="button" id="pin-ok" style="width:100%;background:#1a3f7f;color:#fff;border:none;border-radius:8px;padding:13px;font-size:15px;font-weight:700;cursor:pointer;min-height:48px;margin-bottom:8px">Entrar</button>
+    <button type="button" id="pin-cancel" style="width:100%;background:#f3f2f1;border:none;border-radius:8px;padding:11px;font-size:14px;cursor:pointer">Cancelar</button>
+  </div>
+</div>
+<div id="email-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Enviar parte a SharePoint">
+  <div class="modal-box">
+    <h2>Enviar parte a SharePoint</h2>
+    <p>Pulsa el enlace para abrir Outlook. Solo tienes que pulsar Enviar.</p>
+    <a id="email-link" href="#" target="_blank" class="modal-email-link">&#x1F4E7; Abrir Outlook y enviar</a>
+    <button type="button" id="email-modal-close" class="modal-close">Cerrar</button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" aria-live="polite"><span id="toast-msg"></span></div>
+
+<script>
+var WEBHOOK = 'https://defaulte5d7652b861b401794403d67f5d8bd.9f.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/c49ab6557c0442d4b3654e77f9c78851/triggers/manual/paths/invoke?api-version=1';
+var LS_KEY = 'redalsa_v1';
+
+// Safe storage: works even when localStorage is blocked (content:// URIs on Android)
+var _mem = {};
+var safeStorage = {
+  getItem: function(k) { try { return localStorage.getItem(k); } catch(e) { return _mem[k]||null; } },
+  setItem: function(k,v) { try { localStorage.setItem(k,v); } catch(e) { _mem[k]=v; } },
+  removeItem: function(k) { try { localStorage.removeItem(k); } catch(e) { delete _mem[k]; } }
+};
+var FIELDS = ['agua','aceite','frenos','agua_limpias','rueda_delantera','rueda_trasera','luz_delantera','luz_trasera','chapa','limpieza_ext','limpieza_int','rueda_repuesto','gato','kit_pinchazos','triangulos','guantes','botiquin','chalecos','balizas'];
+
+var CARS_DB = {
+  '4254NBX': { modelo: 'DUSTER',    solred: '7069',     id: 5  },
+  '7068MWG': { modelo: 'DUSTER',    solred: '16',       id: 9  },
+  '4232NBX': { modelo: 'JOGGER',    solred: '11',       id: 3  },
+  '4431NLI': { modelo: 'JOGGER',    solred: 'REDALSA3', id: 4  },
+  '8479MHV': { modelo: 'JOGGER',    solred: '8',        id: 8  },
+  '8480MHV': { modelo: 'JOGGER',    solred: '17',       id: 7  },
+  '7821KSF': { modelo: 'LODGY',     solred: '7',        id: 6  },
+  '5965NLI': { modelo: 'SCENIC',    solred: 'REDALSA1', id: 2  },
+  '6262NKD': { modelo: 'SEAT LEON', solred: '2',        id: 1  }
+};
+
+// ── Storage helpers ──
+function loadInspections() {
+  try { return JSON.parse(safeStorage.getItem(LS_KEY) || '[]'); } catch(e) { return []; }
+}
+function storeInspections(arr) {
+  safeStorage.setItem(LS_KEY, JSON.stringify(arr));
+}
+
+// ── Form state ──
+var currentId = null;
+var choices = {};
+FIELDS.forEach(function(f) { choices[f] = ''; });
+choices['llaves'] = '';
+
+// ── Status logic ──
+function inspStatus(insp) {
+  var anyEmpty = FIELDS.some(function(f) { return !insp[f]; });
+  if (anyEmpty || !insp.fecha_devolucion || !insp.deposito) return 'pend';
+  var hasMal = FIELDS.some(function(f) { return insp[f] === 'MAL' || insp[f] === 'NO'; });
+  if (hasMal || insp.llaves === 'NO') return 'mal';
+  return 'ok';
+}
+
+// ── Toast ──
+var toastTimer = null;
+function showToast(msg) {
+  var el = document.getElementById('toast-msg');
+  el.textContent = msg;
+  el.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(function() { el.classList.remove('show'); }, 2800);
+}
+
+// ── View navigation ──
+var views = ['view-home','view-form','view-detail','view-config'];
+var navBtns = {
+  'nav-home':   'view-home',
+  'nav-new':    'view-form',
+  'nav-config': 'view-config'
+};
+
+function showView(id) {
+  views.forEach(function(v) {
+    document.getElementById(v).classList.toggle('active', v === id);
+  });
+  document.querySelectorAll('.nav-btn').forEach(function(b) {
+    var target = navBtns[b.id];
+    b.classList.toggle('active', target === id);
+  });
+  if (id === 'view-home') renderHome();
+  if (id === 'view-config') {
+    document.getElementById('cfg-email').value = safeStorage.getItem('email_destino') || 'dsierra@redalsa.com';
+  }
+  window.scrollTo(0, 0);
+}
+
+// ── Signature canvas ──
+var canvas = document.getElementById('sig-canvas');
+var ctx = canvas.getContext('2d');
+var drawing = false;
+var lastX = 0, lastY = 0;
+
+function getCanvasPos(e) {
+  var r = canvas.getBoundingClientRect();
+  var scaleX = canvas.width / r.width;
+  var scaleY = canvas.height / r.height;
+  if (e.touches && e.touches.length > 0) {
+    return [(e.touches[0].clientX - r.left) * scaleX, (e.touches[0].clientY - r.top) * scaleY];
+  }
+  return [(e.clientX - r.left) * scaleX, (e.clientY - r.top) * scaleY];
+}
+
+canvas.addEventListener('mousedown', function(e) {
+  drawing = true;
+  var pos = getCanvasPos(e); lastX = pos[0]; lastY = pos[1];
+});
+canvas.addEventListener('mousemove', function(e) {
+  if (!drawing) return;
+  var pos = getCanvasPos(e);
+  ctx.beginPath(); ctx.strokeStyle = '#1a3f7f'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  ctx.moveTo(lastX, lastY); ctx.lineTo(pos[0], pos[1]); ctx.stroke();
+  lastX = pos[0]; lastY = pos[1];
+});
+canvas.addEventListener('mouseup', function() { drawing = false; });
+canvas.addEventListener('mouseleave', function() { drawing = false; });
+canvas.addEventListener('touchstart', function(e) {
+  e.preventDefault(); drawing = true;
+  var pos = getCanvasPos(e); lastX = pos[0]; lastY = pos[1];
+}, {passive: false});
+canvas.addEventListener('touchmove', function(e) {
+  e.preventDefault();
+  if (!drawing) return;
+  var pos = getCanvasPos(e);
+  ctx.beginPath(); ctx.strokeStyle = '#1a3f7f'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  ctx.moveTo(lastX, lastY); ctx.lineTo(pos[0], pos[1]); ctx.stroke();
+  lastX = pos[0]; lastY = pos[1];
+}, {passive: false});
+canvas.addEventListener('touchend', function() { drawing = false; });
+
+document.getElementById('sig-clear-btn').addEventListener('click', function() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+});
+
+// ── Choice buttons ──
+document.querySelectorAll('.choice-btns').forEach(function(group) {
+  group.addEventListener('click', function(e) {
+    var btn = e.target.closest('.cbtn');
+    if (!btn) return;
+    var field = group.dataset.field;
+    var val = btn.dataset.val;
+    choices[field] = val;
+    group.querySelectorAll('.cbtn').forEach(function(b) {
+      b.classList.remove('sel-ok','sel-mal','sel-na');
+    });
+    if (val === 'OK' || val === 'SI') btn.classList.add('sel-ok');
+    else if (val === 'MAL' || val === 'NO') btn.classList.add('sel-mal');
+    else if (val === 'NA') btn.classList.add('sel-na');
+  });
+});
+
+// ── Matricula auto-fill ──
+document.getElementById('f-matricula').addEventListener('change', function() {
+  var opt = this.options[this.selectedIndex];
+  document.getElementById('f-vehiculo').value = opt.dataset.modelo || '';
+  document.getElementById('f-solred-num').value = opt.dataset.solred || '';
+});
+
+// ── Today default date ──
+function todayStr() {
+  return new Date().toISOString().split('T')[0];
+}
+document.getElementById('f-fecha-entrega').value = todayStr();
+
+// ── Nav buttons ──
+Object.keys(navBtns).forEach(function(btnId) {
+  document.getElementById(btnId).addEventListener('click', function() {
+    if (btnId === 'nav-config') { showPinModal(); return; }
+    if (btnId === 'nav-new') resetForm();
+    showView(navBtns[btnId]);
+  });
+});
+
+// ── Form reset ──
+function resetForm() {
+  currentId = null;
+  document.getElementById('form-title').textContent = 'Nueva Inspección';
+  document.getElementById('f-matricula').value = '';
+  document.getElementById('f-vehiculo').value = '';
+  document.getElementById('f-solred-num').value = '';
+  document.getElementById('f-chofer').value = '';
+  document.getElementById('f-acompanantes').value = '';
+  document.getElementById('f-llaves-obs').value = '';
+  document.getElementById('f-fecha-entrega').value = todayStr();
+  document.getElementById('f-kms').value = '';
+  document.getElementById('f-destino').value = '';
+  document.getElementById('f-num-tablet').value = '';
+  document.getElementById('f-deposito').value = '';
+  document.getElementById('f-fecha-devolucion').value = '';
+  document.getElementById('f-observaciones').value = '';
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  FIELDS.forEach(function(f) { choices[f] = ''; });
+  choices['llaves'] = '';
+  document.querySelectorAll('.cbtn').forEach(function(b) {
+    b.classList.remove('sel-ok','sel-mal','sel-na');
+  });
+}
+
+// ── Get form data ──
+function getFormData() {
+  var sigData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  var isEmpty = !sigData.data.some(function(v, i) { return i % 4 !== 3 && v !== 0; });
+  var firma = isEmpty ? '' : canvas.toDataURL('image/png');
+  var obj = {
+    id: currentId || ('id_' + Date.now()),
+    vehiculo: document.getElementById('f-vehiculo').value,
+    matricula: document.getElementById('f-matricula').value,
+    chofer: document.getElementById('f-chofer').value,
+    acompanantes: document.getElementById('f-acompanantes').value,
+    llaves_obs: document.getElementById('f-llaves-obs').value,
+    fecha_entrega: document.getElementById('f-fecha-entrega').value,
+    kms: document.getElementById('f-kms').value,
+    destino: document.getElementById('f-destino').value,
+    num_tablet: document.getElementById('f-num-tablet').value,
+    solred_num: document.getElementById('f-solred-num').value,
+    deposito: document.getElementById('f-deposito').value,
+    fecha_devolucion: document.getElementById('f-fecha-devolucion').value,
+    observaciones: document.getElementById('f-observaciones').value,
+    firma: firma,
+    ts: new Date().toISOString(),
+    synced: false,
+    llaves: choices['llaves'] || ''
+  };
+  FIELDS.forEach(function(f) { obj[f] = choices[f]; });
+  return obj;
+}
+
+// ── Save inspection ──
+function saveInspection(insp) {
+  var arr = loadInspections();
+  var idx = arr.findIndex(function(x) { return x.id === insp.id; });
+  if (idx >= 0) arr[idx] = insp;
+  else arr.unshift(insp);
+  storeInspections(arr);
+}
+
+// ── Submit ──
+document.getElementById('submit-btn').addEventListener('click', function() {
+  var insp = getFormData();
+  if (!insp.matricula) { showToast('Selecciona una matrícula'); return; }
+  saveInspection(insp);
+  showToast('✔ Guardado localmente');
+  showView('view-home');
+});
+
+// ── Home render ──
+function renderHome() {
+  var all = loadInspections();
+  var query = (document.getElementById('search-input').value || '').toLowerCase();
+  var filtered = query ? all.filter(function(i) {
+    return (i.vehiculo || '').toLowerCase().includes(query) ||
+           (i.matricula || '').toLowerCase().includes(query) ||
+           (i.chofer || '').toLowerCase().includes(query);
+  }) : all;
+
+  document.getElementById('stat-total').textContent = all.length;
+  document.getElementById('stat-ok').textContent = all.filter(function(x) { return inspStatus(x) === 'ok'; }).length;
+  document.getElementById('stat-issues').textContent = all.filter(function(x) { return inspStatus(x) === 'mal'; }).length;
+  document.getElementById('stat-pend').textContent = all.filter(function(x) { return inspStatus(x) === 'pend'; }).length;
+
+  var list = document.getElementById('cards-list');
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="empty"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M8 12h8M8 8h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><p>No hay inspecciones</p></div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  filtered.forEach(function(insp) {
+    var st = inspStatus(insp);
+    var badgeClass = st === 'ok' ? 'badge-ok' : st === 'mal' ? 'badge-mal' : 'badge-pend';
+    var badgeText = st === 'ok' ? '&#x2713; Correcto' : st === 'mal' ? '&#x26A0; Incidencias' : 'Incompleto';
+    var dotClass = insp.synced ? 'sync-dot sync-ok' : 'sync-dot sync-pend';
+    var dotTitle = insp.synced ? 'Sincronizado' : 'Pendiente';
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.dataset.id = insp.id;
+    card.innerHTML =
+      '<div class="card-top">' +
+        '<span class="card-veh">' + (insp.vehiculo || '&#x2014;') + '</span>' +
+        '<span class="card-plate">' + (insp.matricula || '&#x2014;') + '</span>' +
+        '<span class="badge ' + badgeClass + '">' + badgeText + '</span>' +
+        '<span class="' + dotClass + '" title="' + dotTitle + '"></span>' +
+      '</div>' +
+      '<div class="card-meta">' +
+        '<span>' + (insp.chofer || 'Sin chófer') + '</span>' +
+        '<span>' + (insp.fecha_entrega || '') + '</span>' +
+        (insp.kms ? '<span>' + Number(insp.kms).toLocaleString() + ' km</span>' : '') +
+      '</div>';
+    card.addEventListener('click', function() { openDetail(insp.id); });
+    list.appendChild(card);
+  });
+}
+
+document.getElementById('search-input').addEventListener('input', renderHome);
+
+// ── Export CSV ──
+document.getElementById('nav-export').addEventListener('click', function() {
+  var all = loadInspections();
+  if (!all.length) { showToast('No hay datos para exportar'); return; }
+  var headers = ['id','vehiculo','matricula','solred_num','chofer','acompanantes','fecha_entrega','kms','destino','num_tablet','deposito','llaves'].concat(FIELDS).concat(['fecha_devolucion','observaciones','synced','ts']);
+  var rows = all.map(function(i) {
+    return headers.map(function(h) {
+      var v = String(i[h] || '').replace(/"/g, '""');
+      return '"' + v + '"';
+    }).join(',');
+  });
+  var csv = headers.join(',') + '\n' + rows.join('\n');
+  var blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = 'inspecciones_redalsa.csv';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('CSV exportado');
+});
+
+// ── Detail render ──
+function renderDetail(insp) {
+  window.currentInsp = insp;
+  var st = inspStatus(insp);
+  var badgeClass = st === 'ok' ? 'badge-ok' : st === 'mal' ? 'badge-mal' : 'badge-pend';
+  var badgeText = st === 'ok' ? '&#x2713; Correcto' : st === 'mal' ? '&#x26A0; Incidencias' : 'Incompleto';
+
+  function dfield(k, v, full) {
+    return '<div class="dfield' + (full ? ' full' : '') + '"><div class="dk">' + k + '</div><div class="dv">' + (v || '&#x2014;') + '</div></div>';
+  }
+
+  var html = '<div style="display:flex;align-items:center;gap:10px;margin-block-end:14px;">' +
+    '<span style="font-size:1.2rem;font-weight:700;">' + (insp.vehiculo || '&#x2014;') + ' &#x2014; ' + (insp.matricula || '&#x2014;') + '</span>' +
+    '<span class="badge ' + badgeClass + '">' + badgeText + '</span>' +
+    '</div>';
+
+  html += '<div class="section"><div class="section-title">Datos del Vehículo</div><div class="section-body detail-grid">';
+  html += dfield('Matrícula', insp.matricula);
+  html += dfield('N.º SOLRED', insp.solred_num);
+  html += dfield('Chófer', insp.chofer);
+  if (insp.acompanantes) html += dfield('Acompañantes', insp.acompanantes);
+  html += dfield('Fecha Entrega', insp.fecha_entrega);
+  html += dfield('Kilómetros', insp.kms ? Number(insp.kms).toLocaleString() + ' km' : '');
+  html += dfield('Destino', insp.destino);
+  html += dfield('Tablet', insp.num_tablet);
+  html += dfield('Depósito', insp.deposito);
+  html += '</div></div>';
+
+  html += '<div class="section"><div class="section-title">Niveles</div><div class="section-body detail-grid">';
+  var nivelLabels = {agua: 'Agua', aceite: 'Aceite', frenos: 'Frenos', agua_limpias: 'Agua Limpias'};
+  ['agua','aceite','frenos','agua_limpias'].forEach(function(f) {
+    html += dfield(nivelLabels[f], insp[f]);
+  });
+  html += '</div></div>';
+
+  var grupos = [
+    {title: 'Ruedas', fields: [{k:'rueda_delantera',lbl:'Delanteras'},{k:'rueda_trasera',lbl:'Traseras'}]},
+    {title: 'Luces', fields: [{k:'luz_delantera',lbl:'Delanteras'},{k:'luz_trasera',lbl:'Traseras'}]},
+    {title: 'Estado Chapa', fields: [{k:'chapa',lbl:'Chapa y Pintura'},{k:'limpieza_ext',lbl:'Limpieza Exterior'},{k:'limpieza_int',lbl:'Limpieza Interior'}]},
+    {title: 'Equipación', fields: [{k:'rueda_repuesto',lbl:'Rueda Repuesto'},{k:'gato',lbl:'Gato'},{k:'kit_pinchazos',lbl:'Kit Pinchazos'},{k:'triangulos',lbl:'Triángulos'},{k:'guantes',lbl:'Guantes con Triángulos'},{k:'botiquin',lbl:'Botiquín'},{k:'chalecos',lbl:'Chalecos'},{k:'balizas',lbl:'Balizas V16'}]}
+  ];
+
+  grupos.forEach(function(g) {
+    html += '<div class="section"><div class="section-title">' + g.title + '</div><div class="section-body detail-grid">';
+    g.fields.forEach(function(f) { html += dfield(f.lbl, insp[f.k]); });
+    html += '</div></div>';
+  });
+
+  html += '<div class="section"><div class="section-title">Varios</div><div class="section-body detail-grid">';
+  var llavesVal = insp.llaves === 'SI' ? '✓ Sí' : insp.llaves === 'NO' ? '✗ No' : (insp.llaves || '&#x2014;');
+  html += dfield('Llaves', llavesVal);
+  if (insp.llaves_obs) html += dfield('Especificaciones llaves', insp.llaves_obs, true);
+  html += '</div></div>';
+
+  if (insp.fecha_devolucion || insp.observaciones) {
+    html += '<div class="section"><div class="section-title">Devolución y Observaciones</div><div class="section-body detail-grid">';
+    html += dfield('Fecha Devolución', insp.fecha_devolucion);
+    if (insp.observaciones) html += dfield('Observaciones', insp.observaciones, true);
+    html += '</div></div>';
+  }
+
+  if (insp.firma) {
+    html += '<div class="section"><div class="section-title">Firma</div><div class="section-body"><img src="' + insp.firma + '" alt="Firma" style="max-width:320px;border:1px solid var(--brd);border-radius:6px;"></div></div>';
+  }
+
+  html += '<div class="detail-actions" style="display:flex;gap:8px;margin-block-start:8px;flex-wrap:wrap;">';
+  html += '<button type="button" id="detail-edit-btn" class="btn-primary">&#x270F; Editar</button>';
+  html += '<button type="button" id="detail-email-btn" style="background:var(--ok);color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;min-height:48px;">&#x1F4E7; Enviar a SharePoint</button>';
+  html += '<button type="button" id="detail-print-btn" style="background:var(--txt2);color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;min-height:48px;">&#x1F5A8; Imprimir</button>';
+  html += '</div>';
+
+  document.getElementById('detail-content').innerHTML = html;
+}
+
+function openDetail(id) {
+  var insp = loadInspections().find(function(x) { return x.id === id; });
+  if (!insp) return;
+  renderDetail(insp);
+  showView('view-detail');
+}
+
+document.getElementById('detail-back-btn').addEventListener('click', function() {
+  showView('view-home');
+});
+
+// ── Load form for edit ──
+function loadFormForEdit(id) {
+  var insp = loadInspections().find(function(x) { return x.id === id; });
+  if (!insp) return;
+  currentId = insp.id;
+  document.getElementById('form-title').textContent = 'Editar Inspección';
+  document.getElementById('f-matricula').value = insp.matricula || '';
+  document.getElementById('f-vehiculo').value = insp.vehiculo || '';
+  document.getElementById('f-solred-num').value = insp.solred_num || '';
+  document.getElementById('f-chofer').value = insp.chofer || '';
+  document.getElementById('f-acompanantes').value = insp.acompanantes || '';
+  document.getElementById('f-llaves-obs').value = insp.llaves_obs || '';
+  document.getElementById('f-fecha-entrega').value = insp.fecha_entrega || '';
+  document.getElementById('f-kms').value = insp.kms || '';
+  document.getElementById('f-destino').value = insp.destino || '';
+  document.getElementById('f-num-tablet').value = insp.num_tablet || '';
+  document.getElementById('f-deposito').value = insp.deposito || '';
+  document.getElementById('f-fecha-devolucion').value = insp.fecha_devolucion || '';
+  document.getElementById('f-observaciones').value = insp.observaciones || '';
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  FIELDS.forEach(function(f) {
+    choices[f] = insp[f] || '';
+    var group = document.querySelector('.choice-btns[data-field="' + f + '"]');
+    if (!group) return;
+    group.querySelectorAll('.cbtn').forEach(function(b) {
+      b.classList.remove('sel-ok','sel-mal','sel-na');
+      if (b.dataset.val === insp[f]) {
+        if (insp[f] === 'OK' || insp[f] === 'SI') b.classList.add('sel-ok');
+        else if (insp[f] === 'MAL' || insp[f] === 'NO') b.classList.add('sel-mal');
+        else if (insp[f] === 'NA') b.classList.add('sel-na');
+      }
+    });
+  });
+  choices['llaves'] = insp.llaves || '';
+  var llavesGroup = document.querySelector('.choice-btns[data-field="llaves"]');
+  if (llavesGroup) {
+    llavesGroup.querySelectorAll('.cbtn').forEach(function(b) {
+      b.classList.remove('sel-ok','sel-mal','sel-na');
+      if (b.dataset.val === insp.llaves) {
+        if (insp.llaves === 'SI') b.classList.add('sel-ok');
+        else if (insp.llaves === 'NO') b.classList.add('sel-mal');
+      }
+    });
+  }
+  showView('view-form');
+}
+
+// ── Delegated listener on detail-content (Edit, Email, Print) ──
+// ── PIN Modal ──
+function showPinModal() {
+  var m = document.getElementById('pin-modal');
+  var inp = document.getElementById('pin-input');
+  var err = document.getElementById('pin-error');
+  inp.value = '';
+  err.style.display = 'none';
+  m.style.display = 'flex';
+  setTimeout(function() { inp.focus(); }, 100);
+}
+
+function checkPin() {
+  var entered = document.getElementById('pin-input').value;
+  var stored = safeStorage.getItem('app_pin') || '1234';
+  if (entered === stored) {
+    document.getElementById('pin-modal').style.display = 'none';
+    document.getElementById('partes-count').textContent = loadInspections().length;
+    showView('view-config');
+  } else {
+    var err = document.getElementById('pin-error');
+    err.style.display = 'block';
+    document.getElementById('pin-input').value = '';
+    document.getElementById('pin-input').focus();
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('detail-content').addEventListener('click', function(e) {
+    var btn = e.target.closest('button');
+    if (!btn || !window.currentInsp) return;
+    if (btn.id === 'detail-edit-btn') {
+      loadFormForEdit(window.currentInsp.id);
+    } else if (btn.id === 'detail-print-btn') {
+      window.print();
+    } else if (btn.id === 'detail-email-btn') {
+      var emailTo = safeStorage.getItem('email_destino') || 'dsierra@redalsa.com';
+      var car = CARS_DB[window.currentInsp.matricula] || {};
+      var subject = '[PARTE VEHICULO] ' + (window.currentInsp.matricula || '') + ' — ' + (window.currentInsp.vehiculo || '') + ' — ' + (window.currentInsp.fecha_entrega || '');
+      var data = {
+        chofer: window.currentInsp.chofer || '',
+        acompanantes: window.currentInsp.acompanantes || '',
+        vehiculoId: car.id || null,
+        matricula: window.currentInsp.matricula || '',
+        modelo: window.currentInsp.vehiculo || '',
+        solred: window.currentInsp.solred_num || '',
+        fechaEntrega: window.currentInsp.fecha_entrega || null,
+        km: window.currentInsp.kms ? Number(window.currentInsp.kms) : null,
+        destino: window.currentInsp.destino || '',
+        tablet: window.currentInsp.num_tablet || '',
+        deposito: window.currentInsp.deposito || '',
+        agua: window.currentInsp.agua || '',
+        aceite: window.currentInsp.aceite || '',
+        frenos: window.currentInsp.frenos || '',
+        aguaLimpias: window.currentInsp.agua_limpias || '',
+        ruedasDelanteras: window.currentInsp.rueda_delantera || '',
+        ruedasTraseras: window.currentInsp.rueda_trasera || '',
+        lucesDelanteras: window.currentInsp.luz_delantera || '',
+        lucesTraseras: window.currentInsp.luz_trasera || '',
+        chapaPintura: window.currentInsp.chapa || '',
+        limpiezaExterior: window.currentInsp.limpieza_ext || '',
+        limpiezaInterior: window.currentInsp.limpieza_int || '',
+        ruedaRepuesto: window.currentInsp.rueda_repuesto || '',
+        gato: window.currentInsp.gato || '',
+        kitPinchazos: window.currentInsp.kit_pinchazos || '',
+        triangulos: window.currentInsp.triangulos || '',
+        guantesTriangulos: window.currentInsp.guantes || '',
+        botiquin: window.currentInsp.botiquin || '',
+        chalecos: window.currentInsp.chalecos || '',
+        balizas: window.currentInsp.balizas || '',
+        llaves: window.currentInsp.llaves || '',
+        llavesObs: window.currentInsp.llaves_obs || '',
+        fechaDevolucion: window.currentInsp.fecha_devolucion || null,
+        observaciones: window.currentInsp.observaciones || ''
+      };
+      var i = window.currentInsp;
+      var lines = [
+        'PARTE_CHOFER: ' + (i.chofer||'') + '|END|',
+        'PARTE_ACOMP: ' + (i.acompanantes||'') + '|END|',
+        'PARTE_MATRICULA: ' + (i.matricula||'') + '|END|',
+        'PARTE_MODELO: ' + (i.vehiculo||'') + '|END|',
+        'PARTE_SOLRED: ' + (i.solred_num||'') + '|END|',
+        'PARTE_FECHA: ' + (i.fecha_entrega||'') + '|END|',
+        'PARTE_KM: ' + (i.kms||'0') + '|END|',
+        'PARTE_DESTINO: ' + (i.destino||'') + '|END|',
+        'PARTE_TABLET: ' + (i.num_tablet||'') + '|END|',
+        'PARTE_DEPOSITO: ' + (i.deposito||'') + '|END|',
+        'PARTE_AGUA: ' + (i.agua||'') + '|END|',
+        'PARTE_ACEITE: ' + (i.aceite||'') + '|END|',
+        'PARTE_FRENOS: ' + (i.frenos||'') + '|END|',
+        'PARTE_AGUALIMPIAS: ' + (i.agua_limpias||'') + '|END|',
+        'PARTE_RUEDADEL: ' + (i.rueda_delantera||'') + '|END|',
+        'PARTE_RUEDATRA: ' + (i.rueda_trasera||'') + '|END|',
+        'PARTE_LUZDEL: ' + (i.luz_delantera||'') + '|END|',
+        'PARTE_LUZTRA: ' + (i.luz_trasera||'') + '|END|',
+        'PARTE_CHAPA: ' + (i.chapa||'') + '|END|',
+        'PARTE_LIMPEXT: ' + (i.limpieza_ext||'') + '|END|',
+        'PARTE_LIMPINT: ' + (i.limpieza_int||'') + '|END|',
+        'PARTE_RUEDAREPU: ' + (i.rueda_repuesto||'') + '|END|',
+        'PARTE_GATO: ' + (i.gato||'') + '|END|',
+        'PARTE_KITPINCH: ' + (i.kit_pinchazos||'') + '|END|',
+        'PARTE_TRIANG: ' + (i.triangulos||'') + '|END|',
+        'PARTE_GUANTES: ' + (i.guantes||'') + '|END|',
+        'PARTE_BOTIQUIN: ' + (i.botiquin||'') + '|END|',
+        'PARTE_CHALECOS: ' + (i.chalecos||'') + '|END|',
+        'PARTE_BALIZAS: ' + (i.balizas||'') + '|END|',
+        'PARTE_LLAVES: ' + (i.llaves||'') + '|END|',
+        'PARTE_LLAVESOBS: ' + (i.llaves_obs||'') + '|END|',
+        'PARTE_DEVOLUCION: ' + (i.fecha_devolucion||'') + '|END|',
+        'PARTE_OBS: ' + (i.observaciones||'') + '|END|',
+        'PARTE_VEHICULOID: ' + (car.id||'0') + '|END|',
+        'PARTE_SEMANA: ' + (function(d){if(!d)return'0';var dt=new Date(d);dt.setHours(0,0,0,0);dt.setDate(dt.getDate()+4-(dt.getDay()||7));var y=new Date(dt.getFullYear(),0,1);return Math.ceil(((dt-y)/86400000+1)/7);})(i.fecha_entrega) + '|END|'
+      ];
+      var body = lines.join('\n');
+      var outlookUrl = 'https://outlook.office.com/mail/deeplink/compose?to=' + encodeURIComponent(emailTo) + '&subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+      document.getElementById('email-link').href = outlookUrl;
+      document.getElementById('email-modal').style.display = 'flex';
+    }
+  });
+
+  document.getElementById('email-modal-close').addEventListener('click', function() {
+    document.getElementById('email-modal').style.display = 'none';
+  });
+  document.getElementById('email-modal').addEventListener('click', function(e) {
+    if (e.target === this) this.style.display = 'none';
+  });
+
+  document.getElementById('pin-ok').addEventListener('click', checkPin);
+  document.getElementById('pin-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') checkPin();
+  });
+  document.getElementById('pin-cancel').addEventListener('click', function() {
+    document.getElementById('pin-modal').style.display = 'none';
+  });
+  document.getElementById('cfg-change-pin').addEventListener('click', function() {
+    var np = document.getElementById('cfg-new-pin').value.trim();
+    if (np.length >= 4 && /^[0-9]+$/.test(np)) {
+      safeStorage.setItem('app_pin', np);
+      document.getElementById('cfg-new-pin').value = '';
+      alert('PIN cambiado correctamente');
+    } else {
+      alert('El PIN debe tener entre 4 y 6 dígitos numéricos');
+    }
+  });
+  document.getElementById('cfg-reset').addEventListener('click', function() {
+    if (confirm('¿Seguro que quieres borrar TODOS los partes de este dispositivo? Esta acción no se puede deshacer.')) {
+      safeStorage.removeItem('redalsa_v1');
+      document.getElementById('partes-count').textContent = '0';
+      alert('Todos los partes han sido eliminados.');
+    }
+  });
+  document.getElementById('cfg-save').addEventListener('click', function() {
+    var email = document.getElementById('cfg-email').value.trim();
+    if (email) safeStorage.setItem('email_destino', email);
+    showToast('Configuración guardada');
+  });
+
+  renderHome();
+});
+</script>
+</body>
+</html>
